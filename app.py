@@ -1129,15 +1129,11 @@ for i in range(len(daily_equity)):
             + 1
         )
     
-# Current Calendar DD
+# =========================
+# CURRENT CALENDAR DD
+# =========================
 
 current_dd_calendar_days = 0
-
-max_dd_calendar_days = 0
-avg_dd_calendar_days = 0
-
-max_dd_calendar_weeks = 0
-avg_dd_calendar_weeks = 0
 
 if current_dd_duration_days > 0:
 
@@ -1157,31 +1153,35 @@ if current_dd_duration_days > 0:
             - current_dd_start
         ).days + 1
 
-    if len(completed_dd_calendar) > 0:
 
-        max_dd_calendar_days = max(
-            completed_dd_calendar
-        )
+# =========================
+# HISTORICAL CALENDAR DD
+# =========================
 
-        avg_dd_calendar_days = (
-            sum(completed_dd_calendar)
-            / len(completed_dd_calendar)
-        )
-        max_dd_calendar_weeks = (
-            max_dd_calendar_days
-            / 7
-        )
+if len(completed_dd_calendar) > 0:
 
-        avg_dd_calendar_weeks = (
-            avg_dd_calendar_days
-            / 7
-        )
+    max_dd_calendar_days = max(completed_dd_calendar)
 
-    else:
+    avg_dd_calendar_days = (
+        sum(completed_dd_calendar)
+        / len(completed_dd_calendar)
+    )
 
-        max_dd_calendar_days = 0
+else:
 
-        avg_dd_calendar_days = 0    
+    max_dd_calendar_days = 0
+    avg_dd_calendar_days = 0
+
+
+max_dd_calendar_weeks = (
+    max_dd_calendar_days
+    / 7
+)
+
+avg_dd_calendar_weeks = (
+    avg_dd_calendar_days
+    / 7
+)
 
 # =========================
 # CURRENT PEAK-TO-PEAK DD
@@ -2196,6 +2196,12 @@ with tab1:
 
     st.markdown("---")
     st.subheader("Historical Drawdown Time")
+
+    st.dataframe(
+        daily_equity[
+            ["Date", "DrawdownDurationDays"]
+        ].head(20)
+    )
 
     d1, d2 = st.columns(2)
 

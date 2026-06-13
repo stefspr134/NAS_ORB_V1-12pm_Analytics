@@ -2197,12 +2197,6 @@ with tab1:
     st.markdown("---")
     st.subheader("Historical Drawdown Time")
 
-    st.dataframe(
-        daily_equity[
-            ["Date", "DrawdownDurationDays"]
-        ].head(20)
-    )
-
     d1, d2 = st.columns(2)
 
     with d1:

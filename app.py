@@ -7,11 +7,25 @@ st.set_page_config(page_title="Trading Analytics", layout="wide")
 
 from pathlib import Path
 
-csv_file = Path(
-    "/Users/stefsprinz/Library/CloudStorage/GoogleDrive-stefsprinz@gmail.com/My Drive/T R A D I N G/S T R A T E G I E S   &   B A C K T E S T I N G/🍀 OPENING REANGE BREAK OUT/🍀 NAS_ORB/🍀 NAS_ORB_1min Chart/⭐️ 🍀 NAS_ORB-V1_12pm - LIVE TRADING/Python_Trading Analytics_NAS_ORB_V1/NAS_ORB_V1-12pm_Backtesting - TRADES_PYTHON.csv"
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Trade CSV",
+    type=["csv"]
 )
 
-df = pd.read_csv(csv_file)
+if uploaded_file is None:
+    st.info("Please upload a trade CSV to continue.")
+    st.stop()
+
+df = pd.read_csv(uploaded_file)
+
+st.sidebar.success(
+    f"Loaded: {uploaded_file.name}"
+)
+
+st.sidebar.caption(
+    f"{len(df):,} trades loaded"
+)
+
 df["EntryTime"] = pd.to_datetime(df["EntryTime"])
 df["ExitTime"] = pd.to_datetime(df["ExitTime"])
 df = df.sort_values("EntryTime").reset_index(drop=True)

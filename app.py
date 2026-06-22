@@ -104,7 +104,7 @@ if risk_mode == "Fixed Dollar Amount":
     risk_value = st.sidebar.number_input(
         "Risk Amount ($)",
         min_value=1.0,
-        value=300.0,
+        value=250.0,
         step=10.0
     )
 
@@ -634,6 +634,28 @@ weekly_summary_raw = (
         EndBalance=("Balance", "last")
     )
     .reset_index()
+)
+
+weekly_start_dates = (
+    weekly_base
+    .groupby("Week")
+    ["TradeDateNY"]
+    .min()
+    .reset_index()
+    .rename(
+        columns={
+            "TradeDateNY": "Week Start Date"
+        }
+    )
+)
+
+weekly_summary_raw = (
+    weekly_summary_raw
+    .merge(
+        weekly_start_dates,
+        on="Week",
+        how="left"
+    )
 )
 
 weekly_summary_raw["WinRate"] = (
@@ -1202,12 +1224,49 @@ current_dd_dollar = (
     .iloc[-1]
 )
 
+# Last Equity Peak Date
+
+last_equity_peak_date = None
+
+if current_dd_r < 0:
+
+    peak_row = dashboard_df[
+        dashboard_df["DrawdownRFromPeak"] == 0
+    ].index.max()
+
+    if pd.notna(peak_row):
+
+        peak_date = (
+            dashboard_df.loc[
+                peak_row,
+                "EntryTimeNY"
+            ]
+            .date()
+        )
+
+        day = peak_date.day
+
+        if 10 <= day % 100 <= 20:
+            suffix = "th"
+        else:
+            suffix = {
+                1: "st",
+                2: "nd",
+                3: "rd"
+            }.get(day % 10, "th")
+
+        last_equity_peak_date = (
+            f"{day}{suffix} "
+            f"{peak_date.strftime('%B %Y')}"
+        )
+
 # =========================
 # CURRENT LOSS STREAK
 # =========================
 
 current_loss_streak_trades = 0
 current_loss_streak_r = 0
+current_loss_streak_dollar = 0
 
 for i in range(
     len(dashboard_df) - 1,
@@ -1228,21 +1287,14 @@ for i in range(
 
         current_loss_streak_trades += 1
         current_loss_streak_r += trade_r
+        current_loss_streak_dollar += dashboard_df.iloc[i]["Profit$"]
 
-# Prozent und Dollar
+# Prozent aus echtem Dollar-Verlust berechnen
 
 current_loss_streak_pct = (
-    current_loss_streak_r
-    * (
-        current_risk_per_r
-        / account_size
-        * 100
-    )
-)
-
-current_loss_streak_dollar = (
-    current_loss_streak_r
-    * current_risk_per_r
+    current_loss_streak_dollar
+    / account_size
+    * 100
 )
 
 # =========================
@@ -1250,10 +1302,12 @@ current_loss_streak_dollar = (
 # =========================
 
 current_loss_streak_days = 0
+current_loss_streak_start_date = None
 
 if current_loss_streak_trades > 0:
 
     loss_dates = []
+    streak_trade_dates = []
 
     for i in range(
         len(dashboard_df) - 1,
@@ -1266,12 +1320,34 @@ if current_loss_streak_trades > 0:
         if trade_r > 0.5:
             break
 
-        loss_dates.append(
-            dashboard_df.iloc[i]["EntryTimeNY"].date()
+        trade_date = (
+            dashboard_df.iloc[i]["EntryTimeNY"]
+            .date()
         )
+
+        loss_dates.append(trade_date)
+        streak_trade_dates.append(trade_date)
 
     current_loss_streak_days = len(
         set(loss_dates)
+    )
+
+    start_date = min(streak_trade_dates)
+
+    day = start_date.day
+
+    if 10 <= day % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {
+            1: "st",
+            2: "nd",
+            3: "rd"
+        }.get(day % 10, "th")
+
+    current_loss_streak_start_date = (
+        f"{day}{suffix} "
+        f"{start_date.strftime('%B %Y')}"
     )
 
 current_loss_streak_weeks = (
@@ -1451,7 +1527,7 @@ with overview1:
             Strategy
         </div>
         <div style="font-size:22px;">
-            NAS_ORB V1
+            NAS_ORB_V1
         </div>
         """,
         unsafe_allow_html=True
@@ -1564,10 +1640,36 @@ p4.metric(
     f"${ending_balance:,.0f}"
 )
 
-p5.metric(
-    "Peak-to-Peak DD %",
-    f"{dd_status} {max_drawdown_pct:.2f}%"
-)
+with p5:
+
+    st.markdown(
+        """
+        <div style="font-size:14px;">
+            Peak-to-Peak DD %
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    dd_color = (
+        "red"
+        if max_drawdown_pct <= -7.5
+        else "inherit"
+    )
+
+    st.markdown(
+        f"""
+        <div style="
+            font-size:36px;
+            font-weight:400;
+            color:{dd_color};
+            line-height:1.2;
+        ">
+            {dd_status} {max_drawdown_pct:.2f}%
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 left_stats, right_stats = st.columns(2)
 
@@ -1830,6 +1932,26 @@ if selected_year == "All Years":
         st.markdown(
             """
             <div style="font-size:16px;">
+                Last Equity Peak Date
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            f"""
+            <div style="font-size:32px;">
+                {last_equity_peak_date}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        st.markdown(
+            """
+            <div style="font-size:16px;">
                 Current Peak-to-Peak DD Duration
             </div>
             """,
@@ -1890,6 +2012,26 @@ if selected_year == "All Years":
         st.markdown(
             """
             <div style="font-size:16px;">
+                Current Loss Streak Start Date
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            f"""
+            <div style="font-size:32px;">
+                {current_loss_streak_start_date}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        st.markdown(
+            """
+            <div style="font-size:16px;">
                 Current Loss Streak Values
             </div>
             """,
@@ -1900,9 +2042,9 @@ if selected_year == "All Years":
             f"""
             <div style="font-size:32px;">
                 {current_loss_streak_r:.2f}R
-                &nbsp;&nbsp;/&nbsp;&nbsp;
+                &nbsp;&nbsp;&nbsp;
                 {current_loss_streak_pct:.2f}%
-                &nbsp;&nbsp;/&nbsp;&nbsp;
+                &nbsp;&nbsp;&nbsp;
                 ${current_loss_streak_dollar:,.0f}
             </div>
             """,
@@ -1974,6 +2116,86 @@ with tab1:
             "Net R: %{customdata[1]:.2f}R<br>" +
             "Profit: $%{customdata[2]:,.0f}<br>" +
             "Balance: $%{customdata[3]:,.0f}<br>" +
+            "<extra></extra>"
+        )
+    )
+
+    # =========================
+    # DD WARNING MARKERS
+    # =========================
+
+    warning_points = []
+    danger_points = []
+
+    was_warning = False
+    was_danger = False
+
+    for i in range(len(dashboard_df)):
+
+        dd = dashboard_df.iloc[i]["DDFromPeakPct"]
+
+        # Danger Zone (Red)
+
+        if dd <= -8.5:
+
+            if not was_danger:
+
+                danger_points.append(i)
+
+            was_danger = True
+            was_warning = True
+
+        # Warning Zone (Orange)
+
+        elif dd <= -7.5:
+
+            if not was_warning:
+
+                warning_points.append(i)
+
+            was_warning = True
+            was_danger = False
+
+        else:
+
+            was_warning = False
+            was_danger = False
+
+
+    warning_df = dashboard_df.loc[warning_points]
+
+    danger_df = dashboard_df.loc[danger_points]
+
+    fig.add_trace(
+        go.Scatter(
+            x=warning_df.index,
+            y=warning_df["ReturnPct"],
+            mode="markers",
+            name="DD ≥ 7.5%",
+            marker=dict(
+                color="orange",
+                size=10
+            ),
+            hovertemplate=
+            "<b>Warning Drawdown</b><br>" +
+            "Peak-to-Peak DD ≥ 7.5%<br>" +
+            "<extra></extra>"
+        )
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=danger_df.index,
+            y=danger_df["ReturnPct"],
+            mode="markers",
+            name="DD ≥ 8.5%",
+            marker=dict(
+                color="red",
+                size=10
+            ),
+            hovertemplate=
+            "<b>Danger Drawdown</b><br>" +
+            "Peak-to-Peak DD ≥ 8.5%<br>" +
             "<extra></extra>"
         )
     )
@@ -2054,12 +2276,12 @@ with tab1:
     )
 
     header2.markdown(
-        "<div style='font-size:24px;'>Best 🟢</div>",
+        "<div style='font-size:24px;'>🏆 Best</div>",
         unsafe_allow_html=True
     )
 
     header3.markdown(
-        "<div style='font-size:24px;'>Worst 🔻</div>",
+        "<div style='font-size:24px;'>🔻 Worst</div>",
         unsafe_allow_html=True
     )
 
@@ -2149,13 +2371,17 @@ with tab1:
     def format_peak_dd(dd):
 
         if dd <= -9.0:
-            return f"🚨 {dd:.2f}%"
+            return f"🚨 {dd:.2f}%", "red"
 
         elif dd <= -7.5:
-            return f"⚠️ {dd:.2f}%"
+            return f"⚠️ {dd:.2f}%", "red"
 
         else:
-            return f"{dd:.2f}%"
+            return f"{dd:.2f}%", "black"
+        
+    peak_dd_text, peak_dd_color = (
+        format_peak_dd(peak_to_peak_dd)
+    )
 
 
     def format_ftmo_daily_dd(dd):
@@ -2180,7 +2406,14 @@ with tab1:
 
     c1.write("10%: Worst Peak-to-Peak DD")
     c2.write(f"{peak_to_peak_dd_r:.2f}R")
-    c3.write(format_peak_dd(peak_to_peak_dd))
+    c3.markdown(
+        f"""
+        <span style="color:{peak_dd_color};">
+            {peak_dd_text}
+        </span>
+        """,
+        unsafe_allow_html=True
+    )
     c4.write(f"${peak_to_peak_dd_dollar:,.0f}")
 
     c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
@@ -2256,13 +2489,15 @@ with tab1:
     if selected_year == "All Years":
 
         xaxis_config = dict(
-            tickformat="%Y"
+            tickformat="%Y",
+            title="Date"
         )
 
     else:
 
         xaxis_config = dict(
-            tickformat="%b"
+            tickformat="%b",
+            title="Date"
         )
 
     fig_dd.update_layout(
@@ -2282,7 +2517,7 @@ with tab1:
         xaxis=xaxis_config,
 
         yaxis=dict(
-            title="%",
+            title="Drawdown %",
             ticksuffix="%"
         )
     )
@@ -2505,6 +2740,13 @@ with tab5:
         .apply(format_daily_dd)
     )
 
+    weekly_summary["Week Start Date"] = (
+        pd.to_datetime(
+            weekly_summary["Week Start Date"]
+        )
+        .dt.strftime("%d %b %Y")
+    )
+
     weekly_summary["W/L/BE"] = (
         weekly_summary["Wins"].astype(str)
         + " / "
@@ -2529,6 +2771,7 @@ with tab5:
     weekly_summary = weekly_summary[
         [
             "Week",
+            "Week Start Date",
             "Trading Days",
             "Trades",
             "W/L/BE",
